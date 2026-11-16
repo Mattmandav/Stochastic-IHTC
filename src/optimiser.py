@@ -92,18 +92,29 @@ def extract_solution(model, instance):
     return {"patients": extract_patients(model, instance)}
 
 
-def exact_model(data_dir="./data", time_limit=None, verbose=False):
-    """Solve every instance in `data_dir` with the exact Gurobi model.
+def write_solution(name, solution, output_dir="./solutions"):
+    """Write `solution` to `output_dir`/sol_<name>.json and return the path."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"sol_{name}.json"
+    path.write_text(json.dumps(solution, indent=4))
+    return path
 
-    Returns a dict mapping instance name to its solution.
+
+def exact_model(name, instance, output_dir="./solutions", time_limit=None, verbose=False):
+    """Solve one instance with the exact Gurobi model and write the solution.
+
+    The solution is written to `output_dir`/sol_<name>.json. Returns the
+    solution, or None (and writes nothing) if Gurobi found no solution.
     """
-    solutions = {}
-    for name, instance in load_instances(data_dir).items():
-        model = build_model(name, instance)
-        model.Params.OutputFlag = int(verbose)
-        if time_limit is not None:
-            model.Params.TimeLimit = time_limit
-        model.optimize()
-        solutions[name] = extract_solution(model, instance)
-        model.dispose()
-    return solutions
+    model = build_model(name, instance)
+    model.Params.OutputFlag = int(verbose)
+    if time_limit is not None:
+        model.Params.TimeLimit = time_limit
+    model.optimize()
+    solution = extract_solution(model, instance)
+    model.dispose()
+
+    if solution is not None:
+        write_solution(name, solution, output_dir)
+    return solution
