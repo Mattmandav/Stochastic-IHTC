@@ -30,10 +30,19 @@ def build_model(name, instance):
     rooms = [r["id"] for r in instance["rooms"]]
     theaters = [t["id"] for t in instance["operating_theaters"]]
 
+    # Variables
     model = gp.Model(name)
     model._admission = model.addVars(patients, days, vtype=GRB.BINARY, name="admission")
     model._room = model.addVars(patients, rooms, vtype=GRB.BINARY, name="room")
     model._ot = model.addVars(patients, theaters, vtype=GRB.BINARY, name="ot")
+
+    # Hard constraints
+
+
+    # Soft constraints
+
+    
+
     return model
 
 
