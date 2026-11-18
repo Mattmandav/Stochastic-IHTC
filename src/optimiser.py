@@ -98,6 +98,10 @@ def build_model(name, instance):
     # Hard constraints
     """
 
+    # H1 No gender mix: Patients of different genders may not share a room on any day.
+
+    # H2 Compatible rooms: Patients can only be assigned to one of their compatible rooms.
+
     # H5 Mandatory versus optional patients: All mandatory patients must be admitted within the decision horizon, whereas optional patients may be postponed to future periods
     mandatory = [p["id"] for p in instance["patients"] if p["mandatory"]]
     optional = [p["id"] for p in instance["patients"] if not p["mandatory"]]
@@ -110,6 +114,8 @@ def build_model(name, instance):
         for d in days:
             if d < p["surgery_release_day"] or d > last_day:
                 model._admission[p["id"], d].UB = 0
+
+    # H7 Room capacity: The number of patients that occupy a room per day cannot exceed the capacity of the room.
 
     """
     # Soft constraints
