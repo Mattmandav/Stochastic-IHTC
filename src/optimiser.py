@@ -29,7 +29,7 @@ def build_model(name, instance):
     days = range(instance["days"])
     rooms = [r["id"] for r in instance["rooms"]]
     theaters = [t["id"] for t in instance["operating_theaters"]]
-    genders = ["A", "B"] #TODO: Automate collection of this list from occupants and patients
+    genders = sorted({person["gender"] for person in instance["patients"] + instance["occupants"]})
 
     # Variables
     model = gp.Model(name)
@@ -44,7 +44,7 @@ def build_model(name, instance):
 
     # Soft constraints
 
-
+    
 
     return model
 
