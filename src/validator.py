@@ -114,11 +114,30 @@ def validate(instance_path, solution):
     return result
 
 
-def print_summary(results):
-    """Print a table of total violations and cost per instance."""
+def print_summary(results, detailed=False):
+    """Print a table of total violations and cost per instance.
+
+    With `detailed=True`, also print each instance's hard constraint violations
+    and soft constraint costs (count, weight and weighted cost) by component.
+    """
     print(f"\n{'Instance':<12}{'Violations':>12}{'Cost':>14}")
     for name, result in results.items():
         if result is None:
             print(f"{name:<12}{'no solution':>26}")
         else:
             print(f"{name:<12}{result['total_violations']:>12}{result['total_cost']:>14}")
+
+    if not detailed:
+        return
+    for name, result in results.items():
+        if result is None:
+            continue
+        print(f"\n{name}")
+        print(f"  {'Hard constraint violations':<30}{'Count':>8}")
+        for component, count in result["violations"].items():
+            print(f"  {component:<30}{count:>8}")
+        print(f"  {'Total':<30}{result['total_violations']:>8}")
+        print(f"\n  {'Soft constraint costs':<30}{'Count':>8}{'Weight':>8}{'Cost':>14}")
+        for component, cost in result["costs"].items():
+            print(f"  {component:<30}{cost['count']:>8}{cost['weight']:>8}{cost['weighted']:>14}")
+        print(f"  {'Total':<30}{'':>16}{result['total_cost']:>14}")
