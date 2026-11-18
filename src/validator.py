@@ -1,5 +1,6 @@
 """Run the official IHTC 2024 validator (validator/IHTP_Validator.cc) on solutions."""
 
+import importlib.util
 import json
 import os
 import re
@@ -19,24 +20,30 @@ _VIOLATION_LINE = re.compile(r"^(\w+)\.+\s*(-?\d+)$")
 
 
 def _compile_command(compiler):
-    """Command line to build the validator with `compiler`."""
-    if Path(compiler).stem.lower() == "cl":  # MSVC
-        return [compiler, "/nologo", "/O2", "/EHsc", "/std:c++17", f"/Fe:{BINARY}", str(SOURCE)]
-    return [compiler, "-O2", "-std=c++17", "-o", str(BINARY), str(SOURCE)]
+    """Command line to build the validator with `compiler` (a command prefix list)."""
+    if Path(compiler[0]).stem.lower() == "cl":  # MSVC
+        return [*compiler, "/nologo", "/O2", "/EHsc", "/std:c++17", f"/Fe:{BINARY}", str(SOURCE)]
+    return [*compiler, "-O2", "-std=c++17", "-o", str(BINARY), str(SOURCE)]
 
 
 def _find_compiler():
-    """First C++ compiler found: $CXX if set, else g++, clang++ or cl on the PATH."""
+    """Command prefix for the first C++ compiler found.
+
+    Uses $CXX if set, else g++, clang++ or cl on the PATH, else the clang bundled
+    with the `ziglang` Python package (a dev dependency, so no admin rights or
+    system install are needed).
+    """
     candidates = [os.environ["CXX"]] if os.environ.get("CXX") else ["g++", "clang++", "cl"]
     for candidate in candidates:
         if path := shutil.which(candidate):
-            return path
+            return [path]
+    if importlib.util.find_spec("ziglang") is not None:
+        return [sys.executable, "-m", "ziglang", "c++"]
     raise RuntimeError(
-        f"No C++ compiler found (looked for {', '.join(candidates)}) to build {SOURCE.name}.\n"
-        "Either install one and open a new terminal, e.g. on Windows:\n"
-        "    winget install BrechtSanders.WinLibs.POSIX.UCRT\n"
-        "or set CXX to a compiler's path, or compile the validator yourself to\n"
-        f"    {BINARY}"
+        f"No C++ compiler found (looked for {', '.join(candidates)} and the ziglang package) "
+        f"to build {SOURCE.name}.\n"
+        "Install the dev dependencies with `uv sync`, set CXX to a compiler's path,\n"
+        f"or compile the validator yourself to\n    {BINARY}"
     )
 
 
@@ -45,7 +52,7 @@ def compile_validator():
     if BINARY.exists() and BINARY.stat().st_mtime >= SOURCE.stat().st_mtime:
         return BINARY
     compiler = _find_compiler()
-    print(f"Compiling {SOURCE.name} with {compiler} ...")
+    print(f"Compiling {SOURCE.name} with {' '.join(compiler)} (first run only, may take a minute) ...")
     subprocess.run(
         _compile_command(compiler),
         cwd=VALIDATOR_DIR,  # so the validator finds json.hpp

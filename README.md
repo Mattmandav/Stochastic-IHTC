@@ -14,13 +14,12 @@ official IHTC 2024 validator and a table of violations and costs is printed.
 
 The validator is compiled automatically on first use with the first C++
 compiler found: `$CXX` if set, otherwise `g++`, `clang++` or MSVC's `cl` on
-your `PATH`. On Windows without a compiler, one option is MinGW-w64:
+your `PATH`. If there is none, it falls back to the clang compiler bundled with
+the [`ziglang`](https://pypi.org/project/ziglang/) Python package, which `uv run`
+installs as a dev dependency, so no system compiler or admin rights are needed.
+The first build takes about a minute; later runs reuse the compiled validator.
 
-```bash
-winget install BrechtSanders.WinLibs.POSIX.UCRT
-```
-
-then open a new terminal so `g++` is on the `PATH`. To compile it by hand:
+To compile it by hand:
 
 ```bash
 cd validator
