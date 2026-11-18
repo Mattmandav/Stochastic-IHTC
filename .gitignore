@@ -4,3 +4,7 @@ __pycache__/
 
 solutions/
 example_sol.json
+
+# Compiled validator
+validator/IHTP_Validator
+validator/IHTP_Validator.exe

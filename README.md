@@ -9,12 +9,35 @@ uv run main.py
 ```
 
 Each instance in `data/` is solved in turn and its solution is written to
-`solutions/sol_<instance>.json`.
+`solutions/sol_<instance>.json`. The solutions are then checked with the
+official IHTC 2024 validator and a table of violations and costs is printed.
+
+The validator is compiled automatically on first use, which needs `g++` on
+your `PATH`. To compile it by hand:
+
+```bash
+cd validator
+g++ -O2 -o IHTP_Validator IHTP_Validator.cc
+```
 
 ## Licence
 
-The code in this repository is licensed under the MIT License (see [`LICENSE`](LICENSE)).
-The instances in `data/` are licensed separately under CC BY 4.0 (see below).
+The code in this repository is licensed under the MIT License (see [`LICENSE`](LICENSE)),
+except for the third-party files listed below, which keep their own terms.
+
+| Path | Author | Licence |
+| --- | --- | --- |
+| `data/` | IHTC 2024 organisers | CC BY 4.0 (see [Data](#data)) |
+| `validator/IHTP_Validator.cc` | IHTC 2024 organisers | None stated; not covered by this repository's MIT licence |
+| `validator/json.hpp` | Niels Lohmann ([nlohmann/json](https://github.com/nlohmann/json), `develop` branch, header version 3.12.0) | MIT (see [`validator/LICENSE-nlohmann-json`](validator/LICENSE-nlohmann-json)) |
+
+## Validator
+
+`validator/IHTP_Validator.cc` is the official solution validator of the
+[Integrated Healthcare Timetabling Competition 2024](https://ihtc2024.github.io/),
+included unmodified (apart from line endings). It depends on the JSON for Modern C++
+single header `validator/json.hpp` by Niels Lohmann, taken unmodified from the
+`develop` branch as the validator's instructions direct.
 
 ## Data
 
