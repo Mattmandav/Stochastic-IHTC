@@ -82,8 +82,7 @@ def build_model(name, instance):
         (model._patient_assignment.sum(p, "*", r) == model._room[p, r] for p in patients for r in rooms),
         name="link_room",
     )
-    # Each patient is admitted at most once, and has one OT if and only if admitted
-    model.addConstrs((model._admission.sum(p, "*") <= 1 for p in patients), name="admit_once")
+    # Each patient has one OT if and only if admitted (admitted at most once is H5)
     model.addConstrs(
         (model._ot.sum(p, "*") == model._admission.sum(p, "*") for p in patients),
         name="link_ot",
@@ -100,8 +99,17 @@ def build_model(name, instance):
     """
 
     # H5 Mandatory versus optional patients: All mandatory patients must be admitted within the decision horizon, whereas optional patients may be postponed to future periods
+    mandatory = [p["id"] for p in instance["patients"] if p["mandatory"]]
+    optional = [p["id"] for p in instance["patients"] if not p["mandatory"]]
+    model.addConstrs((model._admission.sum(p, "*") == 1 for p in mandatory), name="H5_mandatory")
+    model.addConstrs((model._admission.sum(p, "*") <= 1 for p in optional), name="H5_optional")
 
     # H6 Admission day: A patient can be admitted on any day from their release date to their due date. Given that optional patients do not have a due date, they can be admitted on any day after their release date.
+    for p in instance["patients"]:
+        last_day = p["surgery_due_day"] if p["mandatory"] else instance["days"] - 1
+        for d in days:
+            if d < p["surgery_release_day"] or d > last_day:
+                model._admission[p["id"], d].UB = 0
 
     """
     # Soft constraints
