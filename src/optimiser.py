@@ -151,6 +151,10 @@ def build_model(name, instance):
         for r in p["incompatible_room_ids"]:
             model._room[p["id"], r].UB = 0
 
+    # H3 Surgeon overtime: The maximum daily surgery time of a surgeon must not be exceeded.
+
+    # H4 OT overtime: The duration of all surgeries allocated to an OT on a day must not exceed the OT’s maximum capacity.
+
     # H5 Mandatory versus optional patients: All mandatory patients must be admitted within the decision horizon, whereas optional patients may be postponed to future periods
     mandatory = [p["id"] for p in instance["patients"] if p["mandatory"]]
     optional = [p["id"] for p in instance["patients"] if not p["mandatory"]]
