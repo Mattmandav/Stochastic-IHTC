@@ -1,7 +1,9 @@
 """Run the official IHTC 2024 validator (validator/IHTP_Validator.cc) on solutions."""
 
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,12 +18,36 @@ _COST_LINE = re.compile(r"^(\w+)\.+\s*(-?\d+)\s*\(\s*(\d+)\s*X\s*(-?\d+)\s*\)$")
 _VIOLATION_LINE = re.compile(r"^(\w+)\.+\s*(-?\d+)$")
 
 
-def compile_validator(compiler="g++"):
+def _compile_command(compiler):
+    """Command line to build the validator with `compiler`."""
+    if Path(compiler).stem.lower() == "cl":  # MSVC
+        return [compiler, "/nologo", "/O2", "/EHsc", "/std:c++17", f"/Fe:{BINARY}", str(SOURCE)]
+    return [compiler, "-O2", "-std=c++17", "-o", str(BINARY), str(SOURCE)]
+
+
+def _find_compiler():
+    """First C++ compiler found: $CXX if set, else g++, clang++ or cl on the PATH."""
+    candidates = [os.environ["CXX"]] if os.environ.get("CXX") else ["g++", "clang++", "cl"]
+    for candidate in candidates:
+        if path := shutil.which(candidate):
+            return path
+    raise RuntimeError(
+        f"No C++ compiler found (looked for {', '.join(candidates)}) to build {SOURCE.name}.\n"
+        "Either install one and open a new terminal, e.g. on Windows:\n"
+        "    winget install BrechtSanders.WinLibs.POSIX.UCRT\n"
+        "or set CXX to a compiler's path, or compile the validator yourself to\n"
+        f"    {BINARY}"
+    )
+
+
+def compile_validator():
     """Compile the validator if the binary is missing or older than the source."""
     if BINARY.exists() and BINARY.stat().st_mtime >= SOURCE.stat().st_mtime:
         return BINARY
+    compiler = _find_compiler()
+    print(f"Compiling {SOURCE.name} with {compiler} ...")
     subprocess.run(
-        [compiler, "-O2", "-o", str(BINARY), str(SOURCE)],
+        _compile_command(compiler),
         cwd=VALIDATOR_DIR,  # so the validator finds json.hpp
         check=True,
     )

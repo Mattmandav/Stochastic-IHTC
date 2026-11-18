@@ -12,12 +12,19 @@ Each instance in `data/` is solved in turn and its solution is written to
 `solutions/sol_<instance>.json`. The solutions are then checked with the
 official IHTC 2024 validator and a table of violations and costs is printed.
 
-The validator is compiled automatically on first use, which needs `g++` on
-your `PATH`. To compile it by hand:
+The validator is compiled automatically on first use with the first C++
+compiler found: `$CXX` if set, otherwise `g++`, `clang++` or MSVC's `cl` on
+your `PATH`. On Windows without a compiler, one option is MinGW-w64:
+
+```bash
+winget install BrechtSanders.WinLibs.POSIX.UCRT
+```
+
+then open a new terminal so `g++` is on the `PATH`. To compile it by hand:
 
 ```bash
 cd validator
-g++ -O2 -o IHTP_Validator IHTP_Validator.cc
+g++ -O2 -std=c++17 -o IHTP_Validator IHTP_Validator.cc
 ```
 
 ## Licence
