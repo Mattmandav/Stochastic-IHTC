@@ -36,6 +36,9 @@ def build_model(name, instance):
         patient_assignment[p, d, r]: 1 if patient p is admitted on day d to room r
         nurse_working_shifts[n, s]:  1 if nurse n works shift s (fixed by the roster)
         nurse_assignment[n, s, r]:   1 if nurse n covers room r in shift s
+        theater_assignment[p, d, t]: 1 if patient p has surgery on day d in operating theatre t
+        surgeon_time[u, d]:          total surgery time of surgeon u on day d
+        theater_time[t, d]:          total surgery time in operating theatre t on day d
         room_gender[r, d, g]:        1 if room r holds gender g on day d
         room_occupancy_count[r, d]:  number of occupants and patients in room r on day d
 
@@ -53,6 +56,7 @@ def build_model(name, instance):
     theaters = [t["id"] for t in instance["operating_theaters"]]
     genders = sorted({person["gender"] for person in instance["patients"] + instance["occupants"]})
     nurses = [n["id"] for n in instance["nurses"]]
+    surgeons = [u["id"] for u in instance["surgeons"]]
     shifts = range(instance["days"] * len(instance["shift_types"]))
 
     # Variables
@@ -66,6 +70,9 @@ def build_model(name, instance):
     model._patient_assignment = model.addVars(patients, days, rooms, vtype=GRB.BINARY, name="patient_assignment")
     model._nurse_working_shifts = model.addVars(nurses, shifts, vtype=GRB.BINARY, name="nurse_working_shifts")
     model._nurse_assignment = model.addVars(nurses, shifts, rooms, vtype=GRB.BINARY, name="nurse_assignment")
+    model._theater_assignment = model.addVars(patients, days, theaters, vtype=GRB.BINARY, name="theater_assignment")
+    model._surgeon_time = model.addVars(surgeons, days, lb=0, name="surgeon_time")
+    model._theater_time = model.addVars(theaters, days, lb=0, name="theater_time")
 
     # The roster is data: fix nurse_working_shifts to it
     rostered = {
@@ -87,11 +94,33 @@ def build_model(name, instance):
         (model._patient_assignment.sum(p, "*", r) == model._room[p, r] for p in patients for r in rooms),
         name="link_room",
     )
-    # Each patient has one OT if and only if admitted (admitted at most once is H5)
+    # theater_assignment is admission and ot combined. Together these also give each
+    # patient one OT if and only if admitted (admitted at most once is H5).
     model.addConstrs(
-        (model._ot.sum(p, "*") == model._admission.sum(p, "*") for p in patients),
-        name="link_ot",
+        (model._theater_assignment.sum(p, d, "*") == model._admission[p, d] for p in patients for d in days),
+        name="link_theater_admission",
     )
+    model.addConstrs(
+        (model._theater_assignment.sum(p, "*", t) == model._ot[p, t] for p in patients for t in theaters),
+        name="link_theater_ot",
+    )
+
+    # Surgery takes place on the admission day
+    duration = {p["id"]: p["surgery_duration"] for p in instance["patients"]}
+    surgeon_patients = {u: [p["id"] for p in instance["patients"] if p["surgeon_id"] == u] for u in surgeons}
+    model.addConstrs(
+        (model._surgeon_time[u, d]
+         == gp.quicksum(duration[p] * model._admission[p, d] for p in surgeon_patients[u])
+         for u in surgeons for d in days),
+        name="link_surgeon_time",
+    )
+    model.addConstrs(
+        (model._theater_time[t, d]
+         == gp.quicksum(duration[p] * model._theater_assignment[p, d, t] for p in patients)
+         for t in theaters for d in days),
+        name="link_theater_time",
+    )
+
     # Patient presence: p is in room r on day d if admitted to r on one of the
     # length_of_stay days up to and including d. A linear expression, not a variable.
     los = {p["id"]: p["length_of_stay"] for p in instance["patients"]}
@@ -152,8 +181,18 @@ def build_model(name, instance):
             model._room[p["id"], r].UB = 0
 
     # H3 Surgeon overtime: The maximum daily surgery time of a surgeon must not be exceeded.
+    max_surgery_time = {u["id"]: u["max_surgery_time"] for u in instance["surgeons"]}
+    model.addConstrs(
+        (model._surgeon_time[u, d] <= max_surgery_time[u][d] for u in surgeons for d in days),
+        name="H3_surgeon_time",
+    )
 
     # H4 OT overtime: The duration of all surgeries allocated to an OT on a day must not exceed the OT’s maximum capacity.
+    availability = {t["id"]: t["availability"] for t in instance["operating_theaters"]}
+    model.addConstrs(
+        (model._theater_time[t, d] <= availability[t][d] for t in theaters for d in days),
+        name="H4_theater_time",
+    )
 
     # H5 Mandatory versus optional patients: All mandatory patients must be admitted within the decision horizon, whereas optional patients may be postponed to future periods
     mandatory = [p["id"] for p in instance["patients"] if p["mandatory"]]
