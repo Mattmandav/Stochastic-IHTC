@@ -36,11 +36,16 @@ def build_model(name, instance):
         patient_assignment[p, d, r]: 1 if patient p is admitted on day d to room r
         nurse_working_shifts[n, s]:  1 if nurse n works shift s (fixed by the roster)
         nurse_assignment[n, s, r]:   1 if nurse n covers room r in shift s
+        room_gender[r, d, g]:        1 if room r holds gender g on day d
+        room_occupancy_count[r, d]:  number of occupants and patients in room r on day d
+
+    Expressions:
+        patient_present[p, r, d]: 1 if patient p is in room r on day d
 
     Shifts are numbered globally, s = day * len(shift_types) + shift index;
     see `shift_to_day_and_type`.
 
-    TODO: constraints and objective are yet to be specified.
+    TODO: remaining constraints and objective are yet to be specified.
     """
     patients = [p["id"] for p in instance["patients"]]
     days = range(instance["days"])
@@ -56,7 +61,7 @@ def build_model(name, instance):
     model._admission = model.addVars(patients, days, vtype=GRB.BINARY, name="admission")
     model._room = model.addVars(patients, rooms, vtype=GRB.BINARY, name="room")
     model._ot = model.addVars(patients, theaters, vtype=GRB.BINARY, name="ot")
-    model._room_gender = model.addVars(rooms, genders, vtype=GRB.BINARY, name="room_gender")
+    model._room_gender = model.addVars(rooms, days, genders, vtype=GRB.BINARY, name="room_gender")
     model._room_occupancy_count = model.addVars(rooms, days, vtype=GRB.INTEGER, name="room_occupancy_count")
     model._patient_assignment = model.addVars(patients, days, rooms, vtype=GRB.BINARY, name="patient_assignment")
     model._nurse_working_shifts = model.addVars(nurses, shifts, vtype=GRB.BINARY, name="nurse_working_shifts")
@@ -87,6 +92,32 @@ def build_model(name, instance):
         (model._ot.sum(p, "*") == model._admission.sum(p, "*") for p in patients),
         name="link_ot",
     )
+    # Patient presence: p is in room r on day d if admitted to r on one of the
+    # length_of_stay days up to and including d. A linear expression, not a variable.
+    los = {p["id"]: p["length_of_stay"] for p in instance["patients"]}
+    model._patient_present = {
+        (p, r, d): gp.quicksum(
+            model._patient_assignment[p, a, r] for a in range(max(0, d - los[p] + 1), d + 1)
+        )
+        for p in patients for r in rooms for d in days
+    }
+
+    # Occupants (boundary data) are in their room from day 0 for length_of_stay days
+    occupant_count = {(r, d): 0 for r in rooms for d in days}
+    occupant_genders = {(r, d): set() for r in rooms for d in days}
+    for o in instance["occupants"]:
+        for d in range(min(o["length_of_stay"], instance["days"])):
+            occupant_count[o["room_id"], d] += 1
+            occupant_genders[o["room_id"], d].add(o["gender"])
+
+    # room_occupancy_count is the number of occupants and patients in room r on day d
+    model.addConstrs(
+        (model._room_occupancy_count[r, d]
+         == occupant_count[r, d] + gp.quicksum(model._patient_present[p, r, d] for p in patients)
+         for r in rooms for d in days),
+        name="link_occupancy",
+    )
+
     # Nurses can only cover rooms in shifts they work
     model.addConstrs(
         (model._nurse_assignment[n, s, r] <= model._nurse_working_shifts[n, s]
@@ -99,8 +130,26 @@ def build_model(name, instance):
     """
 
     # H1 No gender mix: Patients of different genders may not share a room on any day.
+    # Each room has at most one gender per day; occupants fix it, and a present
+    # patient forces their gender. An empty room may change gender between days.
+    gender = {p["id"]: p["gender"] for p in instance["patients"]}
+    model.addConstrs(
+        (model._room_gender.sum(r, d, "*") <= 1 for r in rooms for d in days),
+        name="H1_one_gender",
+    )
+    for (r, d), occupant_gs in occupant_genders.items():
+        for g in occupant_gs:
+            model._room_gender[r, d, g].LB = 1
+    model.addConstrs(
+        (model._patient_present[p, r, d] <= model._room_gender[r, d, gender[p]]
+         for p in patients for r in rooms for d in days),
+        name="H1_patient_gender",
+    )
 
     # H2 Compatible rooms: Patients can only be assigned to one of their compatible rooms.
+    for p in instance["patients"]:
+        for r in p["incompatible_room_ids"]:
+            model._room[p["id"], r].UB = 0
 
     # H5 Mandatory versus optional patients: All mandatory patients must be admitted within the decision horizon, whereas optional patients may be postponed to future periods
     mandatory = [p["id"] for p in instance["patients"] if p["mandatory"]]
@@ -116,6 +165,11 @@ def build_model(name, instance):
                 model._admission[p["id"], d].UB = 0
 
     # H7 Room capacity: The number of patients that occupy a room per day cannot exceed the capacity of the room.
+    capacity = {r["id"]: r["capacity"] for r in instance["rooms"]}
+    model.addConstrs(
+        (model._room_occupancy_count[r, d] <= capacity[r] for r in rooms for d in days),
+        name="H7_capacity",
+    )
 
     """
     # Soft constraints
