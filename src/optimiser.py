@@ -172,6 +172,27 @@ def build_model(name, instance):
     )
 
     # H8 For each shift, each occupied room must be allocated to a nurse who is on duty during this shift.
+    # (Nurses only cover rooms in shifts they work: see link_nurse_shift.)
+    # At most one nurse per room and shift
+    model.addConstrs(
+        (model._nurse_assignment.sum("*", s, r) <= 1 for s in shifts for r in rooms),
+        name="H8_one_nurse",
+    )
+    # A room occupied by an occupant must have a nurse in every shift of that day
+    shifts_per_day = len(instance["shift_types"])
+    model.addConstrs(
+        (model._nurse_assignment.sum("*", s, r) == 1
+         for (r, d), count in occupant_count.items() if count > 0
+         for s in range(d * shifts_per_day, (d + 1) * shifts_per_day)),
+        name="H8_occupant_room",
+    )
+    # A present patient forces a nurse in their room in every shift of that day
+    model.addConstrs(
+        (model._patient_present[p, r, d] <= model._nurse_assignment.sum("*", s, r)
+         for p in patients for r in rooms for d in days
+         for s in range(d * shifts_per_day, (d + 1) * shifts_per_day)),
+        name="H8_patient_room",
+    )
 
     """
     # Soft constraints
