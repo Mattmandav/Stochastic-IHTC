@@ -29,19 +29,22 @@ def build_model(name, instance):
     days = range(instance["days"])
     rooms = [r["id"] for r in instance["rooms"]]
     theaters = [t["id"] for t in instance["operating_theaters"]]
+    genders = ["A", "B"] #TODO: Automate collection of this list from occupants and patients
 
     # Variables
     model = gp.Model(name)
     model._admission = model.addVars(patients, days, vtype=GRB.BINARY, name="admission")
     model._room = model.addVars(patients, rooms, vtype=GRB.BINARY, name="room")
     model._ot = model.addVars(patients, theaters, vtype=GRB.BINARY, name="ot")
+    model._room_gender = model.addVars(rooms, genders, vtype=GRB.BINARY, name="room_gender")
+    model._room_occupancy_count = model.addVars(rooms, vtype=GRB.INTEGER, name="room_occupancy_count")
 
     # Hard constraints
 
 
     # Soft constraints
 
-    
+
 
     return model
 
