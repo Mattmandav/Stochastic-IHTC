@@ -171,6 +171,8 @@ def build_model(name, instance):
         name="H7_capacity",
     )
 
+    # H8 For each shift, each occupied room must be allocated to a nurse who is on duty during this shift.
+
     """
     # Soft constraints
     """
