@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 
 solutions/
+data/i*
 example_sol.json
 
 # Compiled validator
