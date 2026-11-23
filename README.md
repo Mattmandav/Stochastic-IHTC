@@ -26,6 +26,29 @@ cd validator
 g++ -O2 -std=c++17 -o IHTP_Validator IHTP_Validator.cc
 ```
 
+## Stochastic augmentation
+
+`src/augmentations.py` turns a deterministic instance into a random scenario.
+Each function returns a modified copy (the input is unchanged) and takes a
+`seed` for reproducibility. The spread is set by `cv`, the coefficient of
+variation, so the standard deviation is `cv` times the value in the data.
+
+- `sample_length_of_stay(instance, cv=0.25, seed=None)`: each patient's length
+  of stay is drawn from a normal distribution with mean equal to the current
+  value, rounded up to whole days and at least 1 day. The per-shift
+  `workload_produced` and `skill_level_required` lists are truncated, or
+  extended by repeating the last day, to match. Occupants are unchanged.
+- `sample_surgery_duration(instance, distribution="truncnormal", cv=0.25, seed=None)`:
+  each surgery duration is drawn from a truncated normal (`"truncnormal"`),
+  `"gamma"` or `"lognormal"` distribution with mean equal to the current
+  value, rounded to the nearest minute and at least 1 minute.
+
+```python
+from src.augmentations import sample_length_of_stay, sample_surgery_duration
+
+scenario = sample_surgery_duration(sample_length_of_stay(instance, seed=1), "gamma", seed=1)
+```
+
 ## Licence
 
 The code in this repository is licensed under the MIT License (see [`LICENSE`](LICENSE)),

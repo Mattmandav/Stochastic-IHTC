@@ -6,6 +6,10 @@ solutions/
 data/i*
 example_sol.json
 
-# Compiled validator
+# Compiled validator (and Windows build by-products)
 validator/IHTP_Validator
 validator/IHTP_Validator.exe
+validator/*.pdb
+validator/*.ilk
+validator/*.lib
+validator/*.obj

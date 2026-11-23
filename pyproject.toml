@@ -1,7 +1,7 @@
 [project]
 name = "stochastic-ihtc"
 version = "0.1.0"
-description = "Add your description here"
+description = "Exact Gurobi models for the Integrated Healthcare Timetabling Problem (IHTP) under uncertainty"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
