@@ -26,8 +26,32 @@ def shift_to_day_and_type(shift, shift_types):
     return day, shift_types[k]
 
 
-def build_model(name, instance):
+def relative_overload_tolerances(instance, rho_surgeon=0.0, rho_theater=0.0):
+    """Expected overload tolerances as a fraction of each day's capacity.
+
+    Returns (surgeon_overload_tolerance, theater_overload_tolerance), dicts mapping
+    (surgeon id, day) and (theatre id, day) to minutes: kappa = rho * capacity.
+    Days with zero capacity get zero tolerance.
+    """
+    surgeon = {
+        (u["id"], d): rho_surgeon * cap
+        for u in instance["surgeons"] for d, cap in enumerate(u["max_surgery_time"])
+    }
+    theater = {
+        (t["id"], d): rho_theater * cap
+        for t in instance["operating_theaters"] for d, cap in enumerate(t["availability"])
+    }
+    return surgeon, theater
+
+
+def build_model(name, instance, surgeon_overload_tolerance=None, theater_overload_tolerance=None):
     """Build the Gurobi model for one instance.
+
+    `surgeon_overload_tolerance` and `theater_overload_tolerance` are the expected
+    overload tolerances kappa^s[u, d] and kappa^ot[t, d] for H3 and H4: dicts
+    mapping (surgeon id, day) and (theatre id, day) to minutes. Missing entries,
+    or None, mean 0 (the deterministic constraint). See
+    `relative_overload_tolerances` for tolerances proportional to capacity.
 
     Variables (stored on the model for use when extracting the solution):
         admission[p, d]: 1 if patient p is admitted on day d
@@ -181,16 +205,25 @@ def build_model(name, instance):
             model._room[p["id"], r].UB = 0
 
     # H3 Surgeon overtime: The maximum daily surgery time of a surgeon must not be exceeded.
+    # Expected overload version: E[surgeon_time - max_surgery_time] <= kappa^s[u, d]. The
+    # overload is signed and surgery_time is linear, so only the mean durations
+    # (the instance's surgery_duration) matter: surgeon_time <= max_surgery_time + kappa.
+    # With kappa = 0 (the default) this is the deterministic H3.
     max_surgery_time = {u["id"]: u["max_surgery_time"] for u in instance["surgeons"]}
+    kappa_s = surgeon_overload_tolerance or {}
     model.addConstrs(
-        (model._surgeon_time[u, d] <= max_surgery_time[u][d] for u in surgeons for d in days),
+        (model._surgeon_time[u, d] <= max_surgery_time[u][d] + kappa_s.get((u, d), 0)
+         for u in surgeons for d in days),
         name="H3_surgeon_time",
     )
 
     # H4 OT overtime: The duration of all surgeries allocated to an OT on a day must not exceed the OT’s maximum capacity.
+    # Expected overload version, as for H3: theater_time <= availability + kappa^ot[t, d].
     availability = {t["id"]: t["availability"] for t in instance["operating_theaters"]}
+    kappa_ot = theater_overload_tolerance or {}
     model.addConstrs(
-        (model._theater_time[t, d] <= availability[t][d] for t in theaters for d in days),
+        (model._theater_time[t, d] <= availability[t][d] + kappa_ot.get((t, d), 0)
+         for t in theaters for d in days),
         name="H4_theater_time",
     )
 
@@ -337,13 +370,16 @@ def write_solution(name, solution, output_dir="./solutions"):
     return path
 
 
-def exact_model(name, instance, output_dir="./solutions", time_limit=None, verbose=False):
+def exact_model(name, instance, output_dir="./solutions", time_limit=None, verbose=False,
+                surgeon_overload_tolerance=None, theater_overload_tolerance=None):
     """Solve one instance with the exact Gurobi model and write the solution.
 
     The solution is written to `output_dir`/sol_<name>.json. Returns the
     solution, or None (and writes nothing) if Gurobi found no solution.
+    The overload tolerances are passed to `build_model` (default: none, i.e. the
+    deterministic H3 and H4).
     """
-    model = build_model(name, instance)
+    model = build_model(name, instance, surgeon_overload_tolerance, theater_overload_tolerance)
     model.Params.OutputFlag = int(verbose)
     if time_limit is not None:
         model.Params.TimeLimit = time_limit
